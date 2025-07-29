@@ -20,14 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
         ]);
 
-        // Add CORS middleware
-        $middleware->web(append: [
-            \Fruitcake\Cors\HandleCors::class,
-        ]);
-        
-        $middleware->api(append: [
-            \Fruitcake\Cors\HandleCors::class,
-        ]);
+        //
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
