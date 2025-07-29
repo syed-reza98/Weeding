@@ -2,8 +2,15 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Heart, Calendar, MapPin, Users, Camera, MessageCircle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useEvents, useContent } from '@/hooks/useApi';
+import { Event } from '@/types/wedding';
 
 export default function Home() {
+  const { language, setLanguage } = useLanguage();
+  const { data: events, loading: eventsLoading } = useEvents(language);
+  const { data: homeContent, loading: contentLoading } = useContent('home', language);
+
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -32,6 +39,26 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [weddingDate]);
 
+  const handleLanguageSwitch = () => {
+    setLanguage(language === 'en' ? 'bn' : 'en');
+  };
+
+  // Get content with fallbacks
+  const getContent = (key: string, fallback: string) => {
+    return homeContent?.content?.[key] || fallback;
+  };
+
+  if (eventsLoading || contentLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading wedding details...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50">
       {/* Navigation */}
@@ -40,7 +67,9 @@ export default function Home() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
               <Heart className="h-6 w-6 text-rose-500" />
-              <span className="text-xl font-semibold text-gray-900">Sarah & Ahmad</span>
+              <span className="text-xl font-semibold text-gray-900">
+                {getContent('couple_names', 'Sarah & Ahmad')}
+              </span>
             </div>
             <div className="hidden md:flex space-x-8">
               <a href="#home" className="text-gray-700 hover:text-rose-500 transition-colors">Home</a>
@@ -50,8 +79,11 @@ export default function Home() {
               <a href="#gallery" className="text-gray-700 hover:text-rose-500 transition-colors">Gallery</a>
             </div>
             <div className="flex items-center space-x-4">
-              <button className="text-sm text-gray-600 hover:text-rose-500">
-                বাংলা
+              <button 
+                onClick={handleLanguageSwitch}
+                className="text-sm text-gray-600 hover:text-rose-500 font-medium"
+              >
+                {language === 'en' ? 'বাংলা' : 'English'}
               </button>
             </div>
           </div>
@@ -63,13 +95,20 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="mb-8">
             <h1 className="text-6xl md:text-8xl font-bold text-gray-800 mb-4">
-              Sarah <span className="text-rose-500">&</span> Ahmad
+              {getContent('couple_names', 'Sarah & Ahmad').split(' ').map((name, index, array) => (
+                <span key={index}>
+                  {name}
+                  {index < array.length - 2 && ' '}
+                  {index === array.length - 2 && <span className="text-rose-500"> & </span>}
+                  {index === array.length - 1 && ''}
+                </span>
+              ))}
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 mb-8">
-              December 15, 2024 • Dhaka, Bangladesh
+              {getContent('wedding_date', 'December 15, 2024')} • Dhaka, Bangladesh
             </p>
             <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-              Join us as we celebrate our love story and begin our journey together as husband and wife
+              {getContent('welcome_message', 'Join us as we celebrate our love story and begin our journey together as husband and wife')}
             </p>
           </div>
 
@@ -142,39 +181,62 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl font-bold text-center text-gray-800 mb-12">Wedding Events</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                name: "Mehendi Ceremony",
-                date: "December 13, 2024",
-                time: "6:00 PM",
-                venue: "Bride&apos;s Home"
-              },
-              {
-                name: "Holud Ceremony", 
-                date: "December 14, 2024",
-                time: "10:00 AM",
-                venue: "Groom&apos;s Home"
-              },
-              {
-                name: "Wedding Ceremony",
-                date: "December 15, 2024", 
-                time: "10:00 AM",
-                venue: "Local Community Center"
-              },
-              {
-                name: "Reception",
-                date: "December 15, 2024",
-                time: "7:00 PM", 
-                venue: "Grand Ballroom"
-              }
-            ].map((event, index) => (
-              <div key={index} className="bg-white rounded-xl p-6 shadow-md">
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">{event.name}</h3>
-                <p className="text-rose-500 font-medium mb-1">{event.date}</p>
-                <p className="text-gray-600 mb-1">{event.time}</p>
-                <p className="text-gray-500 text-sm">{event.venue}</p>
-              </div>
-            ))}
+            {events && events.length > 0 ? (
+              events.slice(0, 4).map((event: Event, index: number) => (
+                <div key={event.id} className="bg-white rounded-xl p-6 shadow-md">
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">{event.name}</h3>
+                  <p className="text-rose-500 font-medium mb-1">
+                    {new Date(event.event_date).toLocaleDateString(language === 'bn' ? 'bn-BD' : 'en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                  <p className="text-gray-600 mb-1">
+                    {new Date(event.event_date).toLocaleTimeString(language === 'bn' ? 'bn-BD' : 'en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                  <p className="text-gray-500 text-sm">{event.venue_name}</p>
+                </div>
+              ))
+            ) : (
+              // Fallback data when API is loading or fails
+              [
+                {
+                  name: "Mehendi Ceremony",
+                  date: "December 13, 2024",
+                  time: "6:00 PM",
+                  venue: "Bride&apos;s Home"
+                },
+                {
+                  name: "Holud Ceremony", 
+                  date: "December 14, 2024",
+                  time: "10:00 AM",
+                  venue: "Groom&apos;s Home"
+                },
+                {
+                  name: "Wedding Ceremony",
+                  date: "December 15, 2024", 
+                  time: "10:00 AM",
+                  venue: "Local Community Center"
+                },
+                {
+                  name: "Reception",
+                  date: "December 15, 2024",
+                  time: "7:00 PM", 
+                  venue: "Grand Ballroom"
+                }
+              ].map((event, index) => (
+                <div key={index} className="bg-white rounded-xl p-6 shadow-md">
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">{event.name}</h3>
+                  <p className="text-rose-500 font-medium mb-1">{event.date}</p>
+                  <p className="text-gray-600 mb-1">{event.time}</p>
+                  <p className="text-gray-500 text-sm">{event.venue}</p>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -184,7 +246,9 @@ export default function Home() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <Heart className="h-6 w-6 text-rose-400" />
-            <span className="text-xl font-semibold">Sarah & Ahmad</span>
+            <span className="text-xl font-semibold">
+              {getContent('couple_names', 'Sarah & Ahmad')}
+            </span>
           </div>
           <p className="text-gray-400 mb-6">
             We can&apos;t wait to celebrate with you!
