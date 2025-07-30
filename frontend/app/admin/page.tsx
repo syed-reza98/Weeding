@@ -11,9 +11,11 @@ import {
   BarChart3,
   Shield,
   Bell,
-  Download
+  Download,
+  Server
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import DeploymentDashboard from '@/components/admin/DeploymentDashboard';
 
 interface DashboardCard {
   title: string;
@@ -170,6 +172,7 @@ export default function AdminDashboard() {
           <nav className="-mb-px flex space-x-8">
             {[
               { id: 'overview', name: 'Overview', icon: <BarChart3 className="h-4 w-4" /> },
+              { id: 'deployment', name: 'Deployment', icon: <Server className="h-4 w-4" /> },
               { id: 'rsvps', name: 'RSVPs', icon: <Users className="h-4 w-4" /> },
               { id: 'content', name: 'Content', icon: <FileText className="h-4 w-4" /> },
               { id: 'gallery', name: 'Gallery', icon: <Camera className="h-4 w-4" /> },
@@ -294,8 +297,10 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {activeTab === 'deployment' && <DeploymentDashboard />}
+
         {/* Other tab content would go here */}
-        {activeTab !== 'overview' && (
+        {activeTab !== 'overview' && activeTab !== 'deployment' && (
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <div className="text-gray-400 mb-4">
               {activeTab === 'rsvps' && <Users className="h-16 w-16 mx-auto" />}

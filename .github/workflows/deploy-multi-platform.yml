@@ -18,6 +18,10 @@ on:
         - vercel
         - railway
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME_BACKEND: ${{ github.repository_owner }}/weeding-backend
