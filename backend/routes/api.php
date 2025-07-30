@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\GalleryController;
 use App\Http\Controllers\Api\GuestbookController;
 use App\Http\Controllers\Api\RsvpController;
+use App\Http\Controllers\Api\TransportationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +24,10 @@ use Illuminate\Support\Facades\Route;
 // Public routes (no authentication required)
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{id}', [EventController::class, 'show']);
+Route::get('/accommodations', [AccommodationController::class, 'index']);
+Route::get('/accommodations/{accommodation}', [AccommodationController::class, 'show']);
+Route::get('/transportation', [TransportationController::class, 'index']);
+Route::get('/transportation/{transportation}', [TransportationController::class, 'show']);
 Route::get('/gallery', [GalleryController::class, 'index']);
 Route::get('/gallery/{media}', [GalleryController::class, 'show']);
 Route::get('/guestbook', [GuestbookController::class, 'index']);
