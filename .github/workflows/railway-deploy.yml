@@ -7,6 +7,13 @@ on:
 
 env:
   RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  RAILWAY_PRIVATE_DOMAIN: weeding-backend.railway.internal
+  RAILWAY_PROJECT_NAME: weeding
+  RAILWAY_ENVIRONMENT_NAME: production
+  RAILWAY_SERVICE_NAME: weeding-backend
+  RAILWAY_PROJECT_ID: aa657bf5-3950-4119-b82e-d42bf3d5607b
+  RAILWAY_ENVIRONMENT_ID: d6e59af0-9b1d-4210-a196-a031a32f9139
+  RAILWAY_SERVICE_ID: c1031165-c408-45e4-8f1f-c5ce86ad6639
 
 jobs:
   deploy-backend-railway:
@@ -25,7 +32,7 @@ jobs:
     
     - name: Deploy to Railway
       run: |
-        railway up --detach
+        railway up --detach --service $RAILWAY_SERVICE_ID
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     
@@ -36,16 +43,16 @@ jobs:
     
     - name: Run database migrations
       run: |
-        railway run php artisan migrate --force
+        railway run --service $RAILWAY_SERVICE_ID php artisan migrate --force
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     
     - name: Get deployment URL
       id: railway-url
       run: |
-        DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[0].url // empty')
+        DEPLOYMENT_URL=$(railway status --json --service $RAILWAY_SERVICE_ID | jq -r '.deployments[0].url // empty')
         if [ -z "$DEPLOYMENT_URL" ]; then
-          DEPLOYMENT_URL="https://$(railway status --json | jq -r '.service.name // "weeding-backend"')-production.up.railway.app"
+          DEPLOYMENT_URL="https://$(railway status --json --service $RAILWAY_SERVICE_ID | jq -r '.service.name // "weeding-backend"')-production.up.railway.app"
         fi
         echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_ENV
         echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
@@ -67,7 +74,7 @@ jobs:
         else
           echo "❌ Backend health check failed - Response code: $response"
           echo "🔍 Checking Railway logs..."
-          railway logs
+          railway logs --service $RAILWAY_SERVICE_ID
           exit 1
         fi
     
