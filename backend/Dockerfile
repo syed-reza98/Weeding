@@ -23,34 +23,27 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy composer files
-COPY composer.json composer.lock ./
+# Copy application code first
+COPY . .
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
-
-# Copy application code
-COPY . .
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Copy supervisor configuration
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Copy nginx configuration
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-
-# Create required directories
+# Create required directories and files
 RUN mkdir -p /var/log/supervisor \
     && touch /var/www/html/database/database.sqlite
 
-# Generate application key and run migrations
-RUN php artisan key:generate \
+# Generate application key and run setup
+RUN cp .env.example .env \
+    && sed -i 's|DB_CONNECTION=mysql|DB_CONNECTION=sqlite|' .env \
+    && sed -i 's|DB_DATABASE=wedding_website|DB_DATABASE=/var/www/html/database/database.sqlite|' .env \
+    && php artisan key:generate \
     && php artisan migrate --force \
-    && php artisan db:seed --force \
     && php artisan config:cache \
     && php artisan route:cache \
     && php artisan view:cache
@@ -58,5 +51,5 @@ RUN php artisan key:generate \
 # Expose port
 EXPOSE 8000
 
-# Start supervisor
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Start PHP-FPM server
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
