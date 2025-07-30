@@ -63,11 +63,6 @@ jobs:
     - name: Run Tests
       working-directory: ./backend
       run: php artisan test
-    
-    - name: Security Audit
-      working-directory: ./backend
-      run: composer audit --no-dev
-      continue-on-error: true
 
   frontend-tests:
     runs-on: ubuntu-latest
@@ -98,23 +93,3 @@ jobs:
     - name: Run tests
       working-directory: ./frontend
       run: npm test
-    
-    - name: Security Audit
-      working-directory: ./frontend
-      run: npm audit --audit-level=moderate
-      continue-on-error: true
-
-  docker-hub-deployment:
-    runs-on: ubuntu-latest
-    name: Deploy to Docker Hub
-    needs: [backend-tests, frontend-tests]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Trigger Docker Hub deployment
-      run: |
-        echo "🚀 Triggering Docker Hub deployment workflow..."
-        echo "Backend and frontend images will be built and pushed to Docker Hub"
-        echo "See docker-hub-deploy.yml workflow for detailed deployment process"

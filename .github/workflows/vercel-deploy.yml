@@ -30,18 +30,23 @@ jobs:
     - name: Install Vercel CLI
       run: npm install --global vercel@latest
     
-    - name: Pull Vercel Environment Information
-      run: vercel pull --yes --environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
+    - name: Install frontend dependencies
       working-directory: ./frontend
+      run: npm ci
+    
+    - name: Pull Vercel Environment Information
+      working-directory: ./frontend
+      run: vercel pull --yes --environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
     
     - name: Build Project Artifacts
-      run: vercel build ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
       working-directory: ./frontend
+      run: vercel build ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
       env:
         NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
     
     - name: Deploy Project Artifacts to Vercel
+      working-directory: ./frontend
       run: |
         if [ "${{ github.ref }}" = "refs/heads/main" ]; then
           vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
@@ -50,12 +55,11 @@ jobs:
         fi
         
         echo "DEPLOYMENT_URL=$(cat deployment-url.txt)" >> $GITHUB_ENV
-      working-directory: ./frontend
     
     - name: Health check
       run: |
         # Wait for deployment to be available
-        sleep 15
+        sleep 30
         
         echo "🔍 Performing health check on $DEPLOYMENT_URL"
         

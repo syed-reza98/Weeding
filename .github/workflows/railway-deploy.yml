@@ -25,18 +25,18 @@ jobs:
     
     - name: Deploy to Railway
       run: |
-        cd backend
         railway login --token ${{ secrets.RAILWAY_TOKEN }}
         railway up --detach
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     
+    - name: Wait for deployment
+      run: |
+        echo "⏳ Waiting for deployment to be ready..."
+        sleep 90
+    
     - name: Run database migrations
       run: |
-        cd backend
-        # Wait for deployment to be ready
-        sleep 60
-        
         railway run php artisan migrate --force
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -44,7 +44,6 @@ jobs:
     - name: Get deployment URL
       id: railway-url
       run: |
-        cd backend
         DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[0].url // empty')
         if [ -z "$DEPLOYMENT_URL" ]; then
           DEPLOYMENT_URL="https://$(railway status --json | jq -r '.service.name // "weeding-backend"')-production.up.railway.app"
@@ -69,7 +68,7 @@ jobs:
         else
           echo "❌ Backend health check failed - Response code: $response"
           echo "🔍 Checking Railway logs..."
-          cd backend && railway logs
+          railway logs
           exit 1
         fi
     
@@ -88,9 +87,3 @@ jobs:
         echo "- 🔄 Zero-downtime deployments" >> $GITHUB_STEP_SUMMARY
         echo "- 📊 Built-in metrics and monitoring" >> $GITHUB_STEP_SUMMARY
         echo "- 🔒 Automatic HTTPS" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Environment Variables:**" >> $GITHUB_STEP_SUMMARY
-        echo "Configure the following in Railway dashboard:" >> $GITHUB_STEP_SUMMARY
-        echo "- \`APP_KEY\` (Laravel application key)" >> $GITHUB_STEP_SUMMARY
-        echo "- \`APP_ENV=production\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`APP_DEBUG=false\`" >> $GITHUB_STEP_SUMMARY
