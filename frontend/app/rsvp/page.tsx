@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, Check, X, Heart, UserPlus, LogIn } from 'lucide-react';
+import { Check, X, Heart, UserPlus, LogIn } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEvents } from '@/hooks/useApi';
 import { Event } from '@/types/wedding';
@@ -53,7 +53,7 @@ export default function RSVPPage() {
       if (response.success) {
         setUser(response.data);
       }
-    } catch (err) {
+    } catch {
       // User not authenticated
     } finally {
       setLoading(false);
@@ -365,7 +365,7 @@ export default function RSVPPage() {
                       className="mr-2"
                     />
                     <Check className="h-5 w-5 text-green-500 mr-1" />
-                    Yes, I'll be there!
+                    Yes, I&apos;ll be there!
                   </label>
                   <label className="flex items-center">
                     <input
@@ -376,7 +376,7 @@ export default function RSVPPage() {
                       className="mr-2"
                     />
                     <X className="h-5 w-5 text-red-500 mr-1" />
-                    Sorry, can't make it
+                    Sorry, can&apos;t make it
                   </label>
                 </div>
               </div>

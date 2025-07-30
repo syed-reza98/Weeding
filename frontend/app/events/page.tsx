@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React from 'react';
 import { Calendar, MapPin, Clock, Users } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEvents } from '@/hooks/useApi';
@@ -175,7 +175,7 @@ export default function EventsPage() {
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Ready to Join Us?</h2>
           <p className="text-lg text-gray-600 mb-8">
-            Please let us know which events you'll be attending so we can plan accordingly.
+            Please let us know which events you&apos;ll be attending so we can plan accordingly.
           </p>
           <button className="bg-rose-500 text-white px-8 py-3 rounded-lg text-lg font-medium hover:bg-rose-600 transition-colors">
             RSVP Now

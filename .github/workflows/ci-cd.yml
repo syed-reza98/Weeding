@@ -1,0 +1,132 @@
+name: Wedding Website CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    name: Backend Tests (Laravel)
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, dom, filter, gd, iconv, json, mbstring, pdo
+    
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: backend/vendor
+        key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-
+    
+    - name: Install dependencies
+      working-directory: ./backend
+      run: composer install --prefer-dist --no-progress
+    
+    - name: Create Database
+      working-directory: ./backend
+      run: |
+        touch database/database.sqlite
+        
+    - name: Generate key
+      working-directory: ./backend
+      run: php artisan key:generate
+    
+    - name: Directory Permissions
+      working-directory: ./backend
+      run: chmod -R 755 storage bootstrap/cache
+    
+    - name: Run Migrations
+      working-directory: ./backend
+      run: php artisan migrate --force
+    
+    - name: Run Tests
+      working-directory: ./backend
+      run: php artisan test
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    name: Frontend Tests (Next.js)
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: Run linter
+      working-directory: ./frontend
+      run: npm run lint
+    
+    - name: Build application
+      working-directory: ./frontend
+      run: npm run build
+    
+    # Uncomment when frontend tests are added
+    # - name: Run tests
+    #   working-directory: ./frontend
+    #   run: npm test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    name: Docker Build Test
+    needs: [backend-tests, frontend-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build Backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: false
+        tags: wedding-backend:latest
+    
+    - name: Build Frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: false
+        tags: wedding-frontend:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+    needs: [backend-tests, frontend-tests, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to production
+      run: |
+        echo "🚀 Ready for production deployment!"
+        echo "Add your deployment steps here (e.g., Docker registry push, server deployment)"
+        # Example deployment steps:
+        # - Build and push Docker images to registry
+        # - Deploy to cloud provider (AWS, DigitalOcean, etc.)
+        # - Update production environment
+        # - Run database migrations
+        # - Clear caches

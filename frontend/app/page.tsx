@@ -73,11 +73,13 @@ export default function Home() {
               </span>
             </div>
             <div className="hidden md:flex space-x-8">
-              <a href="#home" className="text-gray-700 hover:text-rose-500 transition-colors">Home</a>
-              <a href="#events" className="text-gray-700 hover:text-rose-500 transition-colors">Events</a>
-              <a href="#location" className="text-gray-700 hover:text-rose-500 transition-colors">Location</a>
-              <a href="#rsvp" className="text-gray-700 hover:text-rose-500 transition-colors">RSVP</a>
-              <a href="#gallery" className="text-gray-700 hover:text-rose-500 transition-colors">Gallery</a>
+              <a href="/" className="text-gray-700 hover:text-rose-500 transition-colors">Home</a>
+              <a href="/events" className="text-gray-700 hover:text-rose-500 transition-colors">Events</a>
+              <a href="/locations" className="text-gray-700 hover:text-rose-500 transition-colors">Locations</a>
+              <a href="/rsvp" className="text-gray-700 hover:text-rose-500 transition-colors">RSVP</a>
+              <a href="/gallery" className="text-gray-700 hover:text-rose-500 transition-colors">Gallery</a>
+              <a href="/accommodation" className="text-gray-700 hover:text-rose-500 transition-colors">Stay</a>
+              <a href="/guestbook" className="text-gray-700 hover:text-rose-500 transition-colors">Guestbook</a>
             </div>
             <div className="flex items-center space-x-4">
               <button 
@@ -138,19 +140,19 @@ export default function Home() {
 
           {/* Quick Navigation */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
-            <a href="#events" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
+            <a href="/events" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
               <Calendar className="h-8 w-8 text-rose-500 mx-auto mb-2" />
               <div className="text-sm font-medium text-gray-800">Events</div>
             </a>
-            <a href="#location" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
+            <a href="/locations" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
               <MapPin className="h-8 w-8 text-rose-500 mx-auto mb-2" />
-              <div className="text-sm font-medium text-gray-800">Location</div>
+              <div className="text-sm font-medium text-gray-800">Locations</div>
             </a>
-            <a href="#rsvp" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
+            <a href="/rsvp" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
               <Users className="h-8 w-8 text-rose-500 mx-auto mb-2" />
               <div className="text-sm font-medium text-gray-800">RSVP</div>
             </a>
-            <a href="#gallery" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
+            <a href="/gallery" className="bg-white/80 backdrop-blur-sm rounded-xl p-6 hover:bg-white/90 transition-all hover:scale-105 shadow-md">
               <Camera className="h-8 w-8 text-rose-500 mx-auto mb-2" />
               <div className="text-sm font-medium text-gray-800">Gallery</div>
             </a>
@@ -255,12 +257,15 @@ export default function Home() {
             We can&apos;t wait to celebrate with you!
           </p>
           <div className="flex justify-center space-x-6">
-            <a href="#guestbook" className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors">
+            <a href="/guestbook" className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors">
               <MessageCircle className="h-5 w-5" />
               <span>Guestbook</span>
             </a>
-            <a href="#contact" className="text-gray-300 hover:text-white transition-colors">
-              Contact Us
+            <a href="/accommodation" className="text-gray-300 hover:text-white transition-colors">
+              Stay
+            </a>
+            <a href="/transportation" className="text-gray-300 hover:text-white transition-colors">
+              Transportation
             </a>
           </div>
         </div>
