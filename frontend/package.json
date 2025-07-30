@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "echo \"Tests will be added in future iterations\" && exit 0",
-    "deploy:vercel": "vercel --prod",
-    "deploy:preview": "vercel"
+    "deploy:vercel": "npx vercel --prod",
+    "deploy:preview": "npx vercel"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^1.16.10",
