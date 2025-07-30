@@ -82,10 +82,10 @@ export default function RSVPPage() {
         setShowAuthForm(false);
         setSuccess('Successfully logged in!');
       } else {
-        setError('Authentication failed');
+        setError(response.message || 'Unable to authenticate. Please check your credentials or try again later.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred during authentication. Please try again later.');
     } finally {
       setSubmitting(false);
     }
