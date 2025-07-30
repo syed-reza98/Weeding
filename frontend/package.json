@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "echo \"Tests will be added in future iterations\" && exit 0"
+    "test": "echo \"Tests will be added in future iterations\" && exit 0",
+    "deploy:vercel": "vercel --prod",
+    "deploy:preview": "vercel"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^1.16.10",

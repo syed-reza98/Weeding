@@ -8,13 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  security-events: write
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME_BACKEND: ${{ github.repository_owner }}/weeding-backend
-  IMAGE_NAME_FRONTEND: ${{ github.repository_owner }}/weeding-frontend
 
 jobs:
   backend-tests:
@@ -111,139 +104,17 @@ jobs:
       run: npm audit --audit-level=moderate
       continue-on-error: true
 
-  docker-build:
+  docker-hub-deployment:
     runs-on: ubuntu-latest
-    name: Docker Build Test
+    name: Deploy to Docker Hub
     needs: [backend-tests, frontend-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Verify GHCR permissions
+    - name: Trigger Docker Hub deployment
       run: |
-        echo "🔍 Verifying GHCR permissions for user: ${{ github.actor }}"
-        echo "Repository: ${{ github.repository }}"
-        echo "Image names:"
-        echo "  Backend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}"
-        echo "  Frontend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}"
-    
-    - name: Extract metadata (tags, labels) for Backend
-      id: meta-backend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha
-    
-    - name: Extract metadata (tags, labels) for Frontend
-      id: meta-frontend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha
-    
-    - name: Build and push Backend Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./backend
-        push: true
-        tags: ${{ steps.meta-backend.outputs.tags }}
-        labels: ${{ steps.meta-backend.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Build and push Frontend Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./frontend
-        push: true
-        tags: ${{ steps.meta-frontend.outputs.tags }}
-        labels: ${{ steps.meta-frontend.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-  security-scan:
-    runs-on: ubuntu-latest
-    name: Security Scanning
-    needs: [docker-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Run Trivy vulnerability scanner on Backend
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-        format: 'sarif'
-        output: 'trivy-backend-results.sarif'
-      continue-on-error: true
-    
-    - name: Run Trivy vulnerability scanner on Frontend
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-        format: 'sarif'
-        output: 'trivy-frontend-results.sarif'
-      continue-on-error: true
-    
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: '.'
-      continue-on-error: true
-
-  deploy:
-    runs-on: ubuntu-latest
-    name: Deploy to Production
-    needs: [backend-tests, frontend-tests, docker-build, security-scan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Deploy to production
-      run: |
-        echo "🚀 Starting production deployment..."
-        echo "Backend image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}"
-        echo "Frontend image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}"
-        
-        # Deployment steps would include:
-        # 1. Deploy backend container
-        # 2. Run database migrations
-        # 3. Deploy frontend container
-        # 4. Update load balancer/proxy configuration
-        # 5. Run health checks
-        # 6. Rollback on failure
-        
-        echo "✅ Production deployment completed successfully!"
-    
-    - name: Health Check
-      run: |
-        echo "🔍 Running post-deployment health checks..."
-        # Add actual health check commands here
-        echo "✅ All health checks passed!"
-    
-    - name: Rollback on Failure
-      if: failure()
-      run: |
-        echo "❌ Deployment failed! Initiating rollback..."
-        # Add rollback commands here
-        echo "🔄 Rollback completed!"
+        echo "🚀 Triggering Docker Hub deployment workflow..."
+        echo "Backend and frontend images will be built and pushed to Docker Hub"
+        echo "See docker-hub-deploy.yml workflow for detailed deployment process"
