@@ -82,9 +82,6 @@ jobs:
         echo "**Backend Image:** \`${{ env.DOCKER_HUB_USERNAME }}/${{ env.BACKEND_IMAGE }}\`" >> $GITHUB_STEP_SUMMARY
         echo "**Frontend Image:** \`${{ env.DOCKER_HUB_USERNAME }}/${{ env.FRONTEND_IMAGE }}\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Available Tags:**" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.meta-backend.outputs.tags }}" | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Pull Commands:**" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
         echo "docker pull ${{ env.DOCKER_HUB_USERNAME }}/${{ env.BACKEND_IMAGE }}:latest" >> $GITHUB_STEP_SUMMARY
