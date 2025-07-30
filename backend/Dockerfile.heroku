@@ -1,0 +1,56 @@
+# Laravel Backend Dockerfile for Heroku
+FROM php:8.2-fpm-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    git \
+    curl \
+    libpng-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    postgresql-dev \
+    nginx \
+    supervisor
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo pdo_pgsql pdo_mysql gd xml
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Copy application code
+COPY . .
+
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
+
+# Create required directories
+RUN mkdir -p /var/log/supervisor
+
+# Copy Heroku-specific configurations
+COPY ./deploy/heroku/nginx.conf /etc/nginx/nginx.conf
+COPY ./deploy/heroku/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Generate application key and cache configurations
+RUN if [ ! -f .env ]; then cp .env.example .env; fi \
+    && php artisan config:cache \
+    && php artisan route:cache \
+    && php artisan view:cache
+
+# Create a health check endpoint
+RUN echo '<?php use Illuminate\Http\Request; Route::get("/api/health", function (Request $request) { return response()->json(["status" => "ok", "timestamp" => now()]); });' >> routes/api.php
+
+# Use the PORT environment variable provided by Heroku
+EXPOSE ${PORT:-8000}
+
+# Start supervisord which will manage nginx and php-fpm
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

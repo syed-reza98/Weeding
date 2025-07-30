@@ -1,0 +1,110 @@
+name: Vercel Deployment
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  deploy-frontend-vercel:
+    runs-on: ubuntu-latest
+    name: Deploy Frontend to Vercel
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install Vercel CLI
+      run: npm install --global vercel@latest
+    
+    - name: Pull Vercel Environment Information
+      run: vercel pull --yes --environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
+      working-directory: ./frontend
+    
+    - name: Build Project Artifacts
+      run: vercel build ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+      working-directory: ./frontend
+      env:
+        NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+    
+    - name: Deploy Project Artifacts to Vercel
+      run: |
+        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
+        else
+          vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
+        fi
+        
+        echo "DEPLOYMENT_URL=$(cat deployment-url.txt)" >> $GITHUB_ENV
+      working-directory: ./frontend
+    
+    - name: Health check
+      run: |
+        # Wait for deployment to be available
+        sleep 15
+        
+        echo "🔍 Performing health check on $DEPLOYMENT_URL"
+        
+        # Check if the frontend is responding
+        response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYMENT_URL" || echo "000")
+        
+        if [ "$response" = "200" ]; then
+          echo "✅ Frontend health check passed - App is running!"
+        else
+          echo "❌ Frontend health check failed - Response code: $response"
+          exit 1
+        fi
+    
+    - name: Deployment summary
+      run: |
+        echo "⚡ Vercel Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "===========================" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Frontend URL:** ${{ env.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** ${{ github.ref == 'refs/heads/main' && 'Production' || 'Preview' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Health Check:** ✅ Passed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Features:**" >> $GITHUB_STEP_SUMMARY
+        echo "- ⚡ Edge deployment with global CDN" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔄 Automatic HTTPS" >> $GITHUB_STEP_SUMMARY
+        echo "- 📱 Mobile-optimized performance" >> $GITHUB_STEP_SUMMARY
+        echo "- 🚀 Serverless functions ready" >> $GITHUB_STEP_SUMMARY
+    
+    - name: Comment deployment URL on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const deploymentUrl = process.env.DEPLOYMENT_URL;
+          const comment = `## 🚀 Deployment Preview
+          
+          Your changes have been deployed to Vercel!
+          
+          **Preview URL:** ${deploymentUrl}
+          
+          **Environment:** Preview
+          **Status:** ✅ Ready
+          
+          This preview will update automatically when you push new changes to this PR.`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
