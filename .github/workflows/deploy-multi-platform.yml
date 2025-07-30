@@ -1,0 +1,355 @@
+name: Multi-Platform Deployment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Choose deployment target'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - ghcr
+        - docker-hub
+        - heroku
+        - vercel
+        - railway
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository_owner }}/weeding-backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository_owner }}/weeding-frontend
+
+jobs:
+  deploy-strategy:
+    runs-on: ubuntu-latest
+    name: Determine Deployment Strategy
+    outputs:
+      deploy_ghcr: ${{ steps.strategy.outputs.deploy_ghcr }}
+      deploy_docker_hub: ${{ steps.strategy.outputs.deploy_docker_hub }}
+      deploy_heroku: ${{ steps.strategy.outputs.deploy_heroku }}
+      deploy_vercel: ${{ steps.strategy.outputs.deploy_vercel }}
+      deploy_railway: ${{ steps.strategy.outputs.deploy_railway }}
+    
+    steps:
+    - name: Determine deployment targets
+      id: strategy
+      run: |
+        TARGET="${{ github.event.inputs.deploy_target || 'all' }}"
+        
+        if [ "$TARGET" = "all" ] || [ "$TARGET" = "ghcr" ]; then
+          echo "deploy_ghcr=true" >> $GITHUB_OUTPUT
+        else
+          echo "deploy_ghcr=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ "$TARGET" = "all" ] || [ "$TARGET" = "docker-hub" ]; then
+          echo "deploy_docker_hub=true" >> $GITHUB_OUTPUT
+        else
+          echo "deploy_docker_hub=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ "$TARGET" = "all" ] || [ "$TARGET" = "heroku" ]; then
+          echo "deploy_heroku=true" >> $GITHUB_OUTPUT
+        else
+          echo "deploy_heroku=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ "$TARGET" = "all" ] || [ "$TARGET" = "vercel" ]; then
+          echo "deploy_vercel=true" >> $GITHUB_OUTPUT
+        else
+          echo "deploy_vercel=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ "$TARGET" = "all" ] || [ "$TARGET" = "railway" ]; then
+          echo "deploy_railway=true" >> $GITHUB_OUTPUT
+        else
+          echo "deploy_railway=false" >> $GITHUB_OUTPUT
+        fi
+
+  ghcr-deployment:
+    needs: deploy-strategy
+    if: needs.deploy-strategy.outputs.deploy_ghcr == 'true'
+    runs-on: ubuntu-latest
+    name: Deploy to GHCR
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata for Backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+        tags: |
+          type=ref,event=branch
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Extract metadata for Frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
+        tags: |
+          type=ref,event=branch
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build and push Frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  docker-hub-deployment:
+    needs: deploy-strategy
+    if: needs.deploy-strategy.outputs.deploy_docker_hub == 'true' && secrets.DOCKER_HUB_USERNAME != ''
+    runs-on: ubuntu-latest
+    name: Deploy to Docker Hub
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+    
+    - name: Extract metadata for Backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_HUB_USERNAME }}/weeding-backend
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Extract metadata for Frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_HUB_USERNAME }}/weeding-frontend
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+    
+    - name: Build and push Frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  heroku-deployment:
+    needs: deploy-strategy
+    if: needs.deploy-strategy.outputs.deploy_heroku == 'true' && secrets.HEROKU_API_KEY != ''
+    runs-on: ubuntu-latest
+    name: Deploy to Heroku
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Heroku Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: registry.heroku.com
+        username: _
+        password: ${{ secrets.HEROKU_API_KEY }}
+    
+    - name: Build and push Backend Docker image to Heroku
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile.heroku
+        push: true
+        tags: registry.heroku.com/${{ secrets.HEROKU_APP_NAME_BACKEND }}/web
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Deploy to Heroku
+      run: |
+        curl https://cli-assets.heroku.com/install.sh | sh
+        echo ${{ secrets.HEROKU_API_KEY }} | docker login --username=_ --password-stdin registry.heroku.com
+        heroku container:release web --app ${{ secrets.HEROKU_APP_NAME_BACKEND }}
+      env:
+        HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+
+  vercel-deployment:
+    needs: deploy-strategy
+    if: needs.deploy-strategy.outputs.deploy_vercel == 'true' && secrets.VERCEL_TOKEN != ''
+    runs-on: ubuntu-latest
+    name: Deploy to Vercel
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install Vercel CLI
+      run: npm install --global vercel@latest
+    
+    - name: Pull Vercel Environment Information
+      run: vercel pull --yes --environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
+      working-directory: ./frontend
+    
+    - name: Build Project Artifacts
+      run: vercel build ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+      working-directory: ./frontend
+    
+    - name: Deploy to Vercel
+      run: vercel deploy --prebuilt ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+      working-directory: ./frontend
+
+  railway-deployment:
+    needs: deploy-strategy
+    if: needs.deploy-strategy.outputs.deploy_railway == 'true' && secrets.RAILWAY_TOKEN != ''
+    runs-on: ubuntu-latest
+    name: Deploy to Railway
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Railway CLI
+      run: |
+        curl -fsSL https://railway.app/install.sh | sh
+        echo "$HOME/.railway/bin" >> $GITHUB_PATH
+    
+    - name: Deploy to Railway
+      run: |
+        cd backend
+        railway login --token ${{ secrets.RAILWAY_TOKEN }}
+        railway up --detach
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  deployment-summary:
+    runs-on: ubuntu-latest
+    name: Deployment Summary
+    needs: [deploy-strategy, ghcr-deployment, docker-hub-deployment, heroku-deployment, vercel-deployment, railway-deployment]
+    if: always()
+    
+    steps:
+    - name: Generate deployment summary
+      run: |
+        echo "# 🚀 Multi-Platform Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "=======================================" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Deployment Target:** ${{ github.event.inputs.deploy_target || 'all' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "## Platform Status" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.deploy-strategy.outputs.deploy_ghcr }}" = "true" ]; then
+          if [ "${{ needs.ghcr-deployment.result }}" = "success" ]; then
+            echo "- ✅ **GHCR**: Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **GHCR**: Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- ⏭️ **GHCR**: Skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.deploy-strategy.outputs.deploy_docker_hub }}" = "true" ]; then
+          if [ "${{ needs.docker-hub-deployment.result }}" = "success" ]; then
+            echo "- ✅ **Docker Hub**: Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **Docker Hub**: Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- ⏭️ **Docker Hub**: Skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.deploy-strategy.outputs.deploy_heroku }}" = "true" ]; then
+          if [ "${{ needs.heroku-deployment.result }}" = "success" ]; then
+            echo "- ✅ **Heroku**: Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **Heroku**: Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- ⏭️ **Heroku**: Skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.deploy-strategy.outputs.deploy_vercel }}" = "true" ]; then
+          if [ "${{ needs.vercel-deployment.result }}" = "success" ]; then
+            echo "- ✅ **Vercel**: Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **Vercel**: Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- ⏭️ **Vercel**: Skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.deploy-strategy.outputs.deploy_railway }}" = "true" ]; then
+          if [ "${{ needs.railway-deployment.result }}" = "success" ]; then
+            echo "- ✅ **Railway**: Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **Railway**: Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- ⏭️ **Railway**: Skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Quick Links" >> $GITHUB_STEP_SUMMARY
+        echo "- 📖 [Deployment Guide](./DEPLOYMENT.md)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🐳 [Docker Images](https://github.com/${{ github.repository }}/pkgs/container)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔄 [Workflow Runs](https://github.com/${{ github.repository }}/actions)" >> $GITHUB_STEP_SUMMARY

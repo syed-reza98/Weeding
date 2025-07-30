@@ -8,8 +8,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_BACKEND: ${{ github.repository }}-backend
-  IMAGE_NAME_FRONTEND: ${{ github.repository }}-frontend
+  IMAGE_NAME_BACKEND: ${{ github.repository_owner }}/weeding-backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository_owner }}/weeding-frontend
 
 jobs:
   backend-tests:
@@ -124,6 +124,14 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Verify GHCR permissions
+      run: |
+        echo "🔍 Verifying GHCR permissions for user: ${{ github.actor }}"
+        echo "Repository: ${{ github.repository }}"
+        echo "Image names:"
+        echo "  Backend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}"
+        echo "  Frontend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}"
     
     - name: Extract metadata (tags, labels) for Backend
       id: meta-backend
