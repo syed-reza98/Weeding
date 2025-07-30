@@ -1621,3 +1621,25 @@ Did you mean one of these?
 #37 /home/runner/work/Weeding/Weeding/backend/artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle()
 #38 {main}
 "} 
+[2025-07-30 20:40:38] production.ERROR: Redis connection [cache] not configured. {"exception":"[object] (InvalidArgumentException(code: 0): Redis connection [cache] not configured. at /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Redis/RedisManager.php:120)
+[stacktrace]
+#0 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Redis/RedisManager.php(91): Illuminate\\Redis\\RedisManager->resolve()
+#1 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Cache/RedisStore.php(357): Illuminate\\Redis\\RedisManager->connection()
+#2 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Cache/RedisStore.php(270): Illuminate\\Cache\\RedisStore->connection()
+#3 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Cache/Repository.php(792): Illuminate\\Cache\\RedisStore->flush()
+#4 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Cache/Console/ClearCommand.php(69): Illuminate\\Cache\\Repository->__call()
+#5 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php(36): Illuminate\\Cache\\Console\\ClearCommand->handle()
+#6 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Container/Util.php(43): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#7 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php(95): Illuminate\\Container\\Util::unwrapIfClosure()
+#8 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod()
+#9 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php(696): Illuminate\\Container\\BoundMethod::call()
+#10 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Console/Command.php(213): Illuminate\\Container\\Container->call()
+#11 /home/runner/work/Weeding/Weeding/backend/vendor/symfony/console/Command/Command.php(318): Illuminate\\Console\\Command->execute()
+#12 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Console/Command.php(182): Symfony\\Component\\Console\\Command\\Command->run()
+#13 /home/runner/work/Weeding/Weeding/backend/vendor/symfony/console/Application.php(1092): Illuminate\\Console\\Command->run()
+#14 /home/runner/work/Weeding/Weeding/backend/vendor/symfony/console/Application.php(341): Symfony\\Component\\Console\\Application->doRunCommand()
+#15 /home/runner/work/Weeding/Weeding/backend/vendor/symfony/console/Application.php(192): Symfony\\Component\\Console\\Application->doRun()
+#16 /home/runner/work/Weeding/Weeding/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php(198): Symfony\\Component\\Console\\Application->run()
+#17 /home/runner/work/Weeding/Weeding/backend/artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle()
+#18 {main}
+"} 

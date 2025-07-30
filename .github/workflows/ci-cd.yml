@@ -40,8 +40,13 @@ jobs:
       working-directory: ./backend
       run: |
         cp .env.example .env
-        sed -i 's|DB_CONNECTION=mysql|DB_CONNECTION=sqlite|' .env
+        sed -i 's|DB_CONNECTION=pgsql|DB_CONNECTION=sqlite|' .env
+        sed -i 's|DB_HOST=127.0.0.1|DB_HOST=|' .env
+        sed -i 's|DB_PORT=5432|DB_PORT=|' .env
+        sed -i 's|DB_USERNAME=|DB_USERNAME=|' .env
+        sed -i 's|DB_PASSWORD=|DB_PASSWORD=|' .env
         sed -i 's|DB_DATABASE=wedding_website|DB_DATABASE=/home/runner/work/Weeding/Weeding/backend/database/database.sqlite|' .env
+        sed -i 's|CACHE_STORE=redis|CACHE_STORE=file|' .env
     
     - name: Create Database
       working-directory: ./backend
@@ -51,6 +56,12 @@ jobs:
     - name: Generate key
       working-directory: ./backend
       run: php artisan key:generate
+    
+    - name: Clear Laravel Cache
+      working-directory: ./backend
+      run: |
+        php artisan config:clear
+        php artisan cache:clear
     
     - name: Directory Permissions
       working-directory: ./backend
