@@ -5,6 +5,7 @@ import { MapPin, Navigation, Phone, Clock } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEvents } from '@/hooks/useApi';
 import { Event } from '@/types/wedding';
+import GoogleMap from '@/components/maps/GoogleMap';
 
 export default function LocationsPage() {
   const { language } = useLanguage();
@@ -123,15 +124,13 @@ export default function LocationsPage() {
                     )}
                   </div>
 
-                  {/* Map Placeholder */}
+                  {/* Google Map */}
                   <div className="mt-6">
-                    <div className="bg-gray-100 rounded-lg h-48 flex items-center justify-center border-2 border-dashed border-gray-300">
-                      <div className="text-center">
-                        <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500 text-sm">Interactive map will be loaded here</p>
-                        <p className="text-gray-400 text-xs">(Google Maps integration coming soon)</p>
-                      </div>
-                    </div>
+                    <GoogleMap 
+                      address={event.venue_address}
+                      venue={event.venue_name}
+                      className="h-48"
+                    />
                   </div>
 
                   {/* Action Buttons */}
