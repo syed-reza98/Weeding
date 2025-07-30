@@ -34,7 +34,7 @@ class GuestbookController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $messages->items()->map(function ($message) {
+            'data' => collect($messages->items())->map(function ($message) {
                 return [
                     'id' => $message->id,
                     'guest_name' => $message->guest_name,

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Heart, Calendar, MapPin, Users, Camera, MessageCircle } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEvents, useContent } from '@/hooks/useApi';
-import { Event } from '@/types/wedding';
+import { Event, Content } from '@/types/wedding';
 
 export default function Home() {
   const { language, setLanguage } = useLanguage();
@@ -45,7 +45,8 @@ export default function Home() {
 
   // Get content with fallbacks
   const getContent = (key: string, fallback: string) => {
-    return homeContent?.content?.[key] || fallback;
+    const content = homeContent as Content | null;
+    return content?.content?.[key] || fallback;
   };
 
   if (eventsLoading || contentLoading) {
@@ -181,8 +182,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl font-bold text-center text-gray-800 mb-12">Wedding Events</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {events && events.length > 0 ? (
-              events.slice(0, 4).map((event: Event, index: number) => (
+            {events && Array.isArray(events) && events.length > 0 ? (
+              events.slice(0, 4).map((event: Event) => (
                 <div key={event.id} className="bg-white rounded-xl p-6 shadow-md">
                   <h3 className="text-xl font-semibold text-gray-800 mb-2">{event.name}</h3>
                   <p className="text-rose-500 font-medium mb-1">
