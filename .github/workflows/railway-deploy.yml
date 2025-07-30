@@ -43,6 +43,7 @@ jobs:
     
     - name: Run database migrations
       run: |
+        cd backend
         railway run --service $RAILWAY_SERVICE_ID php artisan migrate --force
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
