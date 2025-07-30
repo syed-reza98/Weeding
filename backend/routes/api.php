@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AccommodationController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\GalleryController;
@@ -21,6 +22,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// Authentication routes
+Route::post('/auth/register', [AuthController::class, 'register']);
+Route::post('/auth/login', [AuthController::class, 'login']);
+
 // Public routes (no authentication required)
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{id}', [EventController::class, 'show']);
@@ -38,7 +43,13 @@ Route::get('/content-sections', [ContentController::class, 'sections']);
 
 // Authentication required routes
 Route::middleware('auth:sanctum')->group(function () {
-    // User info
+    // Auth management
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::get('/auth/profile', [AuthController::class, 'profile']);
+    Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+
+    // User info (legacy endpoint)
     Route::get('/user', function (Request $request) {
         return response()->json([
             'success' => true,
