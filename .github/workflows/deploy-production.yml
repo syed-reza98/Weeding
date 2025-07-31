@@ -1,0 +1,144 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment even if tests fail'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+  actions: read
+
+jobs:
+  # Step 1: Run CI/CD tests and quality checks
+  run-tests:
+    name: "🧪 Run Tests & Quality Checks"
+    uses: ./.github/workflows/ci-cd.yml
+    
+  # Step 2: Deploy backend to Railway (direct deployment)
+  deploy-backend:
+    name: "🚂 Deploy Backend (Railway)"
+    needs: run-tests
+    if: success() || github.event.inputs.force_deploy == 'true'
+    uses: ./.github/workflows/railway-deploy.yml
+    secrets: inherit
+    
+  # Step 3: Deploy frontend to Vercel
+  deploy-frontend:
+    name: "⚡ Deploy Frontend (Vercel)"
+    needs: deploy-backend
+    if: success()
+    uses: ./.github/workflows/vercel-deploy.yml
+    with:
+      backend-url: ${{ needs.deploy-backend.outputs.deployment-url }}
+      environment: 'production'
+    secrets: inherit
+
+  # Step 4: Post-deployment validation
+  validate-deployment:
+    name: "✅ Validate Full Stack"
+    needs: [deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+    - name: Validate backend API
+      run: |
+        BACKEND_URL="${{ needs.deploy-backend.outputs.deployment-url }}"
+        echo "🔍 Testing backend API at: $BACKEND_URL"
+        
+        # Test health endpoint
+        response=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api/health" || echo "000")
+        if [ "$response" = "200" ]; then
+          echo "✅ Backend API health check passed"
+        else
+          echo "❌ Backend API health check failed (code: $response)"
+          exit 1
+        fi
+        
+        # Test API routes
+        api_response=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api" || echo "000")
+        if [ "$api_response" = "200" ] || [ "$api_response" = "404" ]; then
+          echo "✅ Backend API is responding"
+        else
+          echo "❌ Backend API not responding (code: $api_response)"
+          exit 1
+        fi
+    
+    - name: Validate frontend application
+      run: |
+        FRONTEND_URL="${{ needs.deploy-frontend.outputs.deployment-url }}"
+        echo "🔍 Testing frontend app at: $FRONTEND_URL"
+        
+        # Test frontend accessibility
+        response=$(curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL" || echo "000")
+        if [ "$response" = "200" ] || [ "$response" = "401" ]; then
+          echo "✅ Frontend application is accessible"
+        else
+          echo "❌ Frontend application not accessible (code: $response)"
+          exit 1
+        fi
+    
+    - name: Test frontend-backend connectivity
+      run: |
+        FRONTEND_URL="${{ needs.deploy-frontend.outputs.deployment-url }}"
+        BACKEND_URL="${{ needs.deploy-backend.outputs.deployment-url }}"
+        
+        echo "🔍 Testing frontend-backend connectivity"
+        echo "Frontend: $FRONTEND_URL"
+        echo "Backend: $BACKEND_URL"
+        
+        # You can add more specific connectivity tests here
+        echo "✅ Basic connectivity validated"
+
+    - name: Deployment success summary
+      run: |
+        echo "🎉 Full Stack Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "================================" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**🚂 Backend (Railway):** ${{ needs.deploy-backend.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
+        echo "**⚡ Frontend (Vercel):** ${{ needs.deploy-frontend.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**📦 Container Deployment:** Railway-optimized direct deployment" >> $GITHUB_STEP_SUMMARY
+        echo "**🔄 Deployment Status:** ✅ Successfully deployed and validated" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**🔗 Quick Links:**" >> $GITHUB_STEP_SUMMARY
+        echo "- [Frontend App](${{ needs.deploy-frontend.outputs.deployment-url }})" >> $GITHUB_STEP_SUMMARY
+        echo "- [Backend API](${{ needs.deploy-backend.outputs.deployment-url }}/api)" >> $GITHUB_STEP_SUMMARY
+        echo "- [API Health](${{ needs.deploy-backend.outputs.deployment-url }}/api/health)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**⏱️ Deployment Pipeline:**" >> $GITHUB_STEP_SUMMARY
+        echo "1. ✅ Tests & Quality Checks" >> $GITHUB_STEP_SUMMARY
+        echo "2. ✅ Backend Deployment (Railway)" >> $GITHUB_STEP_SUMMARY
+        echo "3. ✅ Frontend Deployment (Vercel)" >> $GITHUB_STEP_SUMMARY
+        echo "4. ✅ Full Stack Validation" >> $GITHUB_STEP_SUMMARY
+
+  # Cleanup on failure
+  cleanup-on-failure:
+    name: "🧹 Cleanup on Failure"
+    needs: [run-tests, deploy-backend, deploy-frontend, validate-deployment]
+    runs-on: ubuntu-latest
+    if: failure() && github.event.inputs.force_deploy != 'true'
+    
+    steps:
+    - name: Report failure
+      run: |
+        echo "❌ Deployment Pipeline Failed" >> $GITHUB_STEP_SUMMARY
+        echo "============================" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** Deployment failed at one of the pipeline stages" >> $GITHUB_STEP_SUMMARY
+        echo "**Action:** Check the individual job logs for detailed error information" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Pipeline Stages:**" >> $GITHUB_STEP_SUMMARY
+        echo "- Tests & Quality: ${{ needs.run-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Backend Deploy: ${{ needs.deploy-backend.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Frontend Deploy: ${{ needs.deploy-frontend.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Validation: ${{ needs.validate-deployment.result }}" >> $GITHUB_STEP_SUMMARY

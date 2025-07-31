@@ -1,8 +1,12 @@
 name: Railway Deployment
 
 on:
-  push:
-    branches: [ main ]
+  workflow_call:
+    inputs:
+      backend-image:
+        description: 'Backend container image to deploy'
+        required: true
+        type: string
   workflow_dispatch:
 
 env:
@@ -19,7 +23,8 @@ jobs:
   deploy-backend-railway:
     runs-on: ubuntu-latest
     name: Deploy Backend to Railway
-    if: github.ref == 'refs/heads/main'
+    outputs:
+      deployment-url: ${{ steps.railway-url.outputs.deployment_url }}
 
     steps:
       - name: Checkout code
@@ -30,38 +35,45 @@ jobs:
           curl -fsSL https://railway.app/install.sh | sh
           echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
-      - name: Install Composer dependencies
+      - name: Authenticate with GHCR (not needed for direct Railway deployment)
         run: |
-          cd backend
-          composer install --no-interaction --prefer-dist --optimize-autoloader
+          echo "ℹ️ Direct Railway deployment - GHCR authentication not required"
 
       - name: Deploy to Railway
         run: |
+          echo "🚂 Deploying to Railway using Dockerfile.railway..."
+          echo "Project: $RAILWAY_PROJECT_NAME"
+          echo "Service: $RAILWAY_SERVICE_NAME"
+          
+          # Deploy using the Railway CLI with the Railway-specific Dockerfile
           railway up --detach --service $RAILWAY_SERVICE_ID
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Wait for deployment to be ready
         run: |
-          # Poll for up to 2 minutes for deployment to be live
-          for i in {1..24}; do
+          # Poll for up to 3 minutes for deployment to be live
+          for i in {1..36}; do
             STATUS=$(railway status --json | jq -r '.deployments[] | select(.service.name=="weeding-backend") | .status' | head -n1)
             echo "Current status: $STATUS"
-            if [ "$STATUS" = "live" ]; then
+            if [ "$STATUS" = "SUCCESS" ] || [ "$STATUS" = "ACTIVE" ]; then
               echo "Deployment is live!"
-              exit 0
+              break
+            fi
+            if [ "$i" -eq 36 ]; then
+              echo "Deployment did not become live in time."
+              railway logs --service $RAILWAY_SERVICE_ID
+              exit 1
             fi
             sleep 5
           done
-          echo "Deployment did not become live in time."
-          exit 1
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Run database migrations
         run: |
-          cd backend
-          railway run --service $RAILWAY_SERVICE_ID php artisan migrate --force
+          echo "🔄 Database migrations are handled automatically in Dockerfile.railway startup command"
+          echo "Migrations run as part of the container startup process"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -69,29 +81,30 @@ jobs:
         id: railway-url
         run: |
           DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[] | select(.service.name=="weeding-backend") | .url' | head -n1)
-          if [ -z "$DEPLOYMENT_URL" ]; then
+          if [ -z "$DEPLOYMENT_URL" ] || [ "$DEPLOYMENT_URL" = "null" ]; then
             DEPLOYMENT_URL="https://weeding-backend-production.up.railway.app"
           fi
           echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_ENV
           echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          echo "Railway deployment URL: $DEPLOYMENT_URL"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Health check
         run: |
           echo "🔍 Performing health check on $DEPLOYMENT_URL"
-          for i in {1..10}; do
+          for i in {1..12}; do
             response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYMENT_URL/api/health" || echo "000")
             if [ "$response" = "200" ]; then
               echo "✅ Backend health check passed - API is running!"
               exit 0
             fi
-            echo "Waiting for health check to pass (Attempt $i)..."
+            echo "Waiting for health check to pass (Attempt $i)... Response: $response"
             sleep 10
           done
           echo "❌ Backend health check failed - Response code: $response"
           echo "🔍 Checking Railway logs..."
-          railway logs --service $RAILWAY_SERVICE_ID
+          railway logs --service $RAILWAY_SERVICE_ID --tail 50
           exit 1
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -103,6 +116,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Backend URL:** ${{ env.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "**API Endpoint:** ${{ env.DEPLOYMENT_URL }}/api" >> $GITHUB_STEP_SUMMARY
+          echo "**Container Deployment:** Railway-optimized Dockerfile.railway" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Health Check:** ✅ Passed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -111,5 +125,6 @@ jobs:
           echo "- 🔄 Zero-downtime deployments" >> $GITHUB_STEP_SUMMARY
           echo "- 📊 Built-in metrics and monitoring" >> $GITHUB_STEP_SUMMARY
           echo "- 🔒 Automatic HTTPS" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 Railway-optimized container deployment" >> $GITHUB_STEP_SUMMARY
         env:
           DEPLOYMENT_URL: ${{ env.DEPLOYMENT_URL }}

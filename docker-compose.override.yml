@@ -1,0 +1,47 @@
+# Docker Compose Override for Development
+# This file automatically extends docker-compose.yml when running locally
+# Usage: docker-compose up (automatically includes this file)
+
+version: '3.8'
+
+services:
+  # Override backend to use local development settings
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/storage:/var/www/html/storage
+      - backend_vendor_dev:/var/www/html/vendor
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_CHANNEL=stderr
+    # Remove the image reference to force local build
+    image: null
+
+  # Override frontend to use local development settings  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      target: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      - WATCHPACK_POLLING=true
+    # Remove the image reference to force local build
+    image: null
+
+volumes:
+  backend_vendor_dev:
+    driver: local

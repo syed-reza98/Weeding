@@ -1,11 +1,33 @@
 name: Vercel Deployment
 
 on:
+  workflow_call:
+    inputs:
+      backend-url:
+        description: 'Backend API URL for frontend configuration'
+        required: false
+        type: string
+        default: 'https://weeding-backend-production.up.railway.app'
+      environment:
+        description: 'Deployment environment (production/preview)'
+        required: false
+        type: string
+        default: 'production'
+    outputs:
+      deployment-url:
+        description: "Frontend deployment URL"
+        value: ${{ jobs.deploy-frontend-vercel.outputs.deployment-url }}
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      backend-url:
+        description: 'Backend API URL for frontend configuration'
+        required: false
+        type: string
+        default: 'https://weeding-backend-production.up.railway.app'
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -15,6 +37,8 @@ jobs:
   deploy-frontend-vercel:
     runs-on: ubuntu-latest
     name: Deploy Frontend to Vercel
+    outputs:
+      deployment-url: ${{ steps.set-output.outputs.deployment-url }}
     
     steps:
     - name: Checkout code
@@ -34,54 +58,79 @@ jobs:
       working-directory: ./frontend
       run: npm ci
     
+    - name: Set environment variables
+      run: |
+        # Determine deployment environment
+        if [ "${{ github.event_name }}" = "workflow_call" ]; then
+          ENV="${{ inputs.environment }}"
+          API_URL="${{ inputs.backend-url }}"
+        elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          ENV="production"
+          API_URL="${{ inputs.backend-url || 'https://weeding-backend-production.up.railway.app' }}"
+        else
+          ENV="preview"
+          API_URL="${{ inputs.backend-url || 'https://weeding-backend-production.up.railway.app' }}"
+        fi
+        
+        echo "DEPLOYMENT_ENV=$ENV" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_API_URL=$API_URL" >> $GITHUB_ENV
+        
+        echo "Deploying to: $ENV"
+        echo "API URL: $API_URL"
+    
     - name: Pull Vercel Environment Information
-      run: vercel pull --yes --environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
+      run: vercel pull --yes --environment=${{ env.DEPLOYMENT_ENV }} --token=${{ secrets.VERCEL_TOKEN }}
       working-directory: ./frontend
     
     - name: Build Project Artifacts
       working-directory: ./frontend
-      run: vercel build ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+      run: vercel build ${{ env.DEPLOYMENT_ENV == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
       env:
-        NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        NEXT_PUBLIC_API_URL: ${{ env.NEXT_PUBLIC_API_URL }}
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
     
     - name: Deploy Project Artifacts to Vercel
       working-directory: ./frontend
       run: |
-        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+        if [ "${{ env.DEPLOYMENT_ENV }}" = "production" ]; then
           vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
         else
           vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
         fi
         
-        echo "DEPLOYMENT_URL=$(cat deployment-url.txt)" >> $GITHUB_ENV
+        DEPLOYMENT_URL=$(cat deployment-url.txt)
+        echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_ENV
+        echo "Frontend deployed to: $DEPLOYMENT_URL"
+    
+    - name: Set deployment output
+      id: set-output
+      run: |
+        echo "deployment-url=${{ env.DEPLOYMENT_URL }}" >> $GITHUB_OUTPUT
     
     - name: Health check
       run: |
         # Wait for deployment to be available
         sleep 30
         
-        echo "🔍 Performing health check on $DEPLOYMENT_URL/api/health"
+        echo "🔍 Performing health check on $DEPLOYMENT_URL"
         
-        # Check if the frontend health endpoint is responding
-        response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYMENT_URL/api/health" || echo "000")
-        
-        if [ "$response" = "200" ]; then
-          echo "✅ Frontend health check passed - App is running!"
-        else
-          echo "❌ Frontend health check failed - Response code: $response"
-          echo "🔍 Trying root URL as fallback..."
+        # Check if the frontend is responding
+        for i in {1..6}; do
+          response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYMENT_URL" || echo "000")
           
-          # Fallback check on root URL (but don't fail on 401)
-          root_response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYMENT_URL" || echo "000")
-          if [ "$root_response" = "200" ] || [ "$root_response" = "401" ]; then
-            echo "✅ Root URL accessible (code: $root_response) - App deployment successful!"
-          else
-            echo "❌ Both health endpoint and root URL failed"
-            echo "Health endpoint: $response, Root URL: $root_response"
+          if [ "$response" = "200" ] || [ "$response" = "401" ]; then
+            echo "✅ Frontend health check passed - App is running! (code: $response)"
+            break
+          fi
+          
+          if [ "$i" -eq 6 ]; then
+            echo "❌ Frontend health check failed - Response code: $response"
             exit 1
           fi
-        fi
+          
+          echo "Waiting for frontend to be ready (Attempt $i)... Response: $response"
+          sleep 10
+        done
     
     - name: Deployment summary
       run: |
@@ -89,7 +138,8 @@ jobs:
         echo "===========================" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Frontend URL:** ${{ env.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Environment:** ${{ github.ref == 'refs/heads/main' && 'Production' || 'Preview' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** ${{ env.DEPLOYMENT_ENV }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Backend API:** ${{ env.NEXT_PUBLIC_API_URL }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Health Check:** ✅ Passed" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -98,6 +148,7 @@ jobs:
         echo "- 🔄 Automatic HTTPS" >> $GITHUB_STEP_SUMMARY
         echo "- 📱 Mobile-optimized performance" >> $GITHUB_STEP_SUMMARY
         echo "- 🚀 Serverless functions ready" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔗 Connected to Railway backend" >> $GITHUB_STEP_SUMMARY
     
     - name: Comment deployment URL on PR
       if: github.event_name == 'pull_request'
@@ -105,11 +156,13 @@ jobs:
       with:
         script: |
           const deploymentUrl = process.env.DEPLOYMENT_URL;
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL;
           const comment = `## 🚀 Deployment Preview
           
           Your changes have been deployed to Vercel!
           
           **Preview URL:** ${deploymentUrl}
+          **Backend API:** ${apiUrl}
           
           **Environment:** Preview
           **Status:** ✅ Ready

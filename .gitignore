@@ -101,6 +101,7 @@ coverage/
 
 # Backup files
 *.bak
+backups/
 
 # Temporary files
 tmp/
@@ -108,3 +109,16 @@ temp/
 
 # Docker
 .docker/
+
+# Deployment-related temporary files
+Dockerfile.railway
+deployment-url.txt
+.vercel
+
+# Railway
+.railway/
+
+# GHCR and container-related
+docker-compose.*.yml
+!docker-compose.yml
+!docker-compose.override.yml
