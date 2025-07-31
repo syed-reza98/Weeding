@@ -12,7 +12,7 @@ env:
   RAILWAY_SERVICE_NAME: weeding-backend
   RAILWAY_PROJECT_ID: aa657bf5-3950-4119-b82e-d42bf3d5607b
   RAILWAY_ENVIRONMENT_ID: d6e59af0-9b1d-4210-a196-a031a32f9139
-  RAILWAY_SERVICE_ID: c1031165-c408-45e4-8f1f-c5ce86ad6639
+  RAILWAY_SERVICE_ID: c1031165-c408-45e4-8f1f-c5ce86ad6639  # Kept for reference, using SERVICE_NAME now
 
 jobs:
   deploy-backend-railway:
@@ -34,32 +34,156 @@ jobs:
         run: |
           echo "ℹ️ Direct Railway deployment - GHCR authentication not required"
 
-      - name: Deploy to Railway
+      - name: Verify Railway Project and Create Service if Needed
         run: |
-          echo "🚂 Deploying to Railway using Dockerfile.railway..."
+          echo "🚂 Setting up Railway deployment..."
           echo "Project: $RAILWAY_PROJECT_NAME"
           echo "Service: $RAILWAY_SERVICE_NAME"
+          echo "Project ID: $RAILWAY_PROJECT_ID"
           
-          # Deploy using the Railway CLI with the Railway-specific Dockerfile
-          railway up --detach --service $RAILWAY_SERVICE_ID
+          # First, authenticate and check if Railway CLI is working
+          echo "🔐 Testing Railway CLI authentication..."
+          if ! railway whoami; then
+            echo "❌ Railway authentication failed. Please check RAILWAY_TOKEN secret."
+            exit 1
+          fi
+          
+          # Try to link to the project
+          echo "🔗 Linking to Railway project..."
+          if ! railway link $RAILWAY_PROJECT_ID; then
+            echo "❌ Failed to link to project ID: $RAILWAY_PROJECT_ID"
+            echo "🔍 Listing available projects..."
+            railway project list || echo "Could not list projects"
+            exit 1
+          fi
+          
+          # Verify project link worked
+          echo "✅ Successfully linked to Railway project"
+          echo "📋 Project information:"
+          railway status || echo "Could not get project status"
+          
+          # List available services
+          echo "📋 Available services:"
+          SERVICES=$(railway status --json | jq -r '.services[]?.name // empty' 2>/dev/null || echo "")
+          if [ -z "$SERVICES" ]; then
+            echo "⚠️ No services found in project"
+          else
+            echo "$SERVICES"
+          fi
+          
+          # Check if our target service exists
+          SERVICE_EXISTS=$(railway status --json | jq -r '.services[]? | select(.name=="'$RAILWAY_SERVICE_NAME'") | .name' 2>/dev/null || echo "")
+          
+          if [ -z "$SERVICE_EXISTS" ]; then
+            echo "⚠️ Service '$RAILWAY_SERVICE_NAME' not found. Creating it..."
+            
+            # Create the service
+            echo "🏗️ Creating new service: $RAILWAY_SERVICE_NAME"
+            if railway service create $RAILWAY_SERVICE_NAME; then
+              echo "✅ Service '$RAILWAY_SERVICE_NAME' created successfully"
+            else
+              echo "❌ Failed to create service '$RAILWAY_SERVICE_NAME'"
+              echo "💡 Trying alternative service creation method..."
+              
+              # Alternative: Create service during deployment
+              echo "🚀 Will create service during first deployment"
+            fi
+          else
+            echo "✅ Service '$RAILWAY_SERVICE_NAME' already exists"
+          fi
+          
+          # List services again after potential creation
+          echo "📋 Final service list:"
+          railway status --json | jq -r '.services[]? | "\(.name): \(.id)"' 2>/dev/null || echo "Could not list services with details"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Deploy to Railway
+        run: |
+          echo "🚀 Starting Railway deployment..."
+          
+          # Ensure we're in the correct directory with railway.toml
+          if [ ! -f "railway.toml" ]; then
+            echo "❌ railway.toml not found in current directory"
+            ls -la
+            exit 1
+          fi
+          
+          echo "📁 Deployment configuration:"
+          cat railway.toml
+          
+          # Deploy using the Railway CLI
+          echo "🚂 Deploying with Railway CLI..."
+          
+          # Try deployment with service name first
+          if railway up --detach --service $RAILWAY_SERVICE_NAME; then
+            echo "✅ Deployment started successfully with service name"
+          else
+            echo "⚠️ Deployment with service name failed, trying without explicit service..."
+            
+            # If service doesn't exist, Railway will create it during deployment
+            if railway up --detach; then
+              echo "✅ Deployment started successfully (service created automatically)"
+            else
+              echo "❌ Deployment failed completely"
+              echo "🔍 Debugging information:"
+              railway status || echo "Could not get status"
+              railway service list || echo "Could not list services"
+              exit 1
+            fi
+          fi
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Wait for deployment to be ready
         run: |
-          # Poll for up to 3 minutes for deployment to be live
-          for i in {1..36}; do
-            STATUS=$(railway status --json | jq -r '.deployments[] | select(.service.name=="weeding-backend") | .status' | head -n1)
-            echo "Current status: $STATUS"
-            if [ "$STATUS" = "SUCCESS" ] || [ "$STATUS" = "ACTIVE" ]; then
-              echo "Deployment is live!"
+          echo "⏳ Waiting for deployment to be ready..."
+          
+          # Poll for up to 5 minutes for deployment to be live
+          for i in {1..60}; do
+            # Get deployment status - try multiple approaches
+            STATUS=""
+            
+            # Try to get status with service name
+            if [ -n "$RAILWAY_SERVICE_NAME" ]; then
+              STATUS=$(railway status --json 2>/dev/null | jq -r '.deployments[]? | select(.service.name=="'$RAILWAY_SERVICE_NAME'") | .status' 2>/dev/null | head -n1)
+            fi
+            
+            # If no status found, try to get any recent deployment status
+            if [ -z "$STATUS" ] || [ "$STATUS" = "null" ]; then
+              STATUS=$(railway status --json 2>/dev/null | jq -r '.deployments[]? | .status' 2>/dev/null | head -n1)
+            fi
+            
+            # If still no status, try alternative method
+            if [ -z "$STATUS" ] || [ "$STATUS" = "null" ]; then
+              STATUS=$(railway status 2>/dev/null | grep -i "deployment" | head -n1 || echo "UNKNOWN")
+            fi
+            
+            echo "Deployment status (attempt $i/60): $STATUS"
+            
+            # Check for success conditions
+            if [ "$STATUS" = "SUCCESS" ] || [ "$STATUS" = "ACTIVE" ] || [ "$STATUS" = "DEPLOYED" ]; then
+              echo "✅ Deployment is live!"
               break
             fi
-            if [ "$i" -eq 36 ]; then
-              echo "Deployment did not become live in time."
-              railway logs --service $RAILWAY_SERVICE_ID
+            
+            # Check for failure conditions
+            if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CRASHED" ]; then
+              echo "❌ Deployment failed with status: $STATUS"
+              echo "🔍 Fetching deployment logs..."
+              railway logs --service $RAILWAY_SERVICE_NAME --tail 100 2>/dev/null || railway logs --tail 100 2>/dev/null || echo "Could not fetch logs"
               exit 1
             fi
+            
+            # Timeout after 5 minutes
+            if [ "$i" -eq 60 ]; then
+              echo "⏰ Deployment did not become live within 5 minutes."
+              echo "🔍 Final status check and logs:"
+              railway status || echo "Could not get final status"
+              railway logs --service $RAILWAY_SERVICE_NAME --tail 100 2>/dev/null || railway logs --tail 100 2>/dev/null || echo "Could not fetch logs"
+              exit 1
+            fi
+            
             sleep 5
           done
         env:
@@ -75,13 +199,38 @@ jobs:
       - name: Get deployment URL
         id: railway-url
         run: |
-          DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[] | select(.service.name=="weeding-backend") | .url' | head -n1)
+          echo "🔗 Retrieving deployment URL..."
+          
+          # Try multiple methods to get the deployment URL
+          DEPLOYMENT_URL=""
+          
+          # Method 1: Try to get URL from service deployments
+          if [ -n "$RAILWAY_SERVICE_NAME" ]; then
+            DEPLOYMENT_URL=$(railway status --json 2>/dev/null | jq -r '.deployments[]? | select(.service.name=="'$RAILWAY_SERVICE_NAME'") | .url' 2>/dev/null | head -n1)
+          fi
+          
+          # Method 2: Try to get any deployment URL
           if [ -z "$DEPLOYMENT_URL" ] || [ "$DEPLOYMENT_URL" = "null" ]; then
+            DEPLOYMENT_URL=$(railway status --json 2>/dev/null | jq -r '.deployments[]? | .url' 2>/dev/null | head -n1)
+          fi
+          
+          # Method 3: Try to get domain from service
+          if [ -z "$DEPLOYMENT_URL" ] || [ "$DEPLOYMENT_URL" = "null" ]; then
+            DOMAIN=$(railway status --json 2>/dev/null | jq -r '.services[]? | select(.name=="'$RAILWAY_SERVICE_NAME'") | .domains[]?' 2>/dev/null | head -n1)
+            if [ -n "$DOMAIN" ] && [ "$DOMAIN" != "null" ]; then
+              DEPLOYMENT_URL="https://$DOMAIN"
+            fi
+          fi
+          
+          # Method 4: Use fallback URL if nothing found
+          if [ -z "$DEPLOYMENT_URL" ] || [ "$DEPLOYMENT_URL" = "null" ]; then
+            echo "⚠️ Could not determine deployment URL from Railway status, using fallback"
             DEPLOYMENT_URL="https://weeding-backend-production.up.railway.app"
           fi
+          
           echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_ENV
           echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-          echo "Railway deployment URL: $DEPLOYMENT_URL"
+          echo "✅ Railway deployment URL: $DEPLOYMENT_URL"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -99,7 +248,7 @@ jobs:
           done
           echo "❌ Backend health check failed - Response code: $response"
           echo "🔍 Checking Railway logs..."
-          railway logs --service $RAILWAY_SERVICE_ID --tail 50
+          railway logs --service $RAILWAY_SERVICE_NAME --tail 50 || echo "Could not fetch logs"
           exit 1
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
