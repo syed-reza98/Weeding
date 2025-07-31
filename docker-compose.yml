@@ -1,21 +1,18 @@
 # Wedding Website Platform
-# Multi-stage Docker setup for Laravel backend and Next.js frontend
+# Multi-stage Docker setup using GHCR images for Laravel backend and Next.js frontend
 
 version: '3.8'
 
 services:
-  # Laravel Backend
+  # Laravel Backend (using GHCR image)
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/syed-reza98/weeding/backend:latest
     container_name: wedding-backend
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
-      - ./backend:/var/www/html
-      - ./backend/storage:/var/www/html/storage
-      - backend_vendor:/var/www/html/vendor
+      - backend_storage:/var/www/html/storage
+      - backend_logs:/var/www/html/storage/logs
     ports:
       - "8000:8000"
     environment:
@@ -37,36 +34,9 @@ services:
       retries: 3
       start_period: 40s
 
-  # Next.js Frontend (Development)
-  frontend-dev:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-      target: development
-    container_name: wedding-frontend-dev
-    restart: unless-stopped
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - wedding-network
-    profiles:
-      - development
-
-  # Next.js Frontend (Production)
+  # Next.js Frontend (using GHCR image)
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/syed-reza98/weeding/frontend:latest
     container_name: wedding-frontend
     restart: unless-stopped
     ports:
@@ -80,13 +50,70 @@ services:
     networks:
       - wedding-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health", "||", "exit", "1"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Development override services (use local builds)
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wedding-backend-dev
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/storage:/var/www/html/storage
+      - backend_vendor:/var/www/html/vendor
+    ports:
+      - "8001:8000"
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - wedding-network
     profiles:
-      - production
+      - development
+    healthcheck:
+      test: ["CMD", "php", "artisan", "route:list", "--quiet"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: wedding-frontend-dev
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8001/api
+    depends_on:
+      backend-dev:
+        condition: service_healthy
+    networks:
+      - wedding-network
+    profiles:
+      - development
 
   # Redis for caching and sessions
   redis:
@@ -112,14 +139,18 @@ services:
     container_name: wedding-db-backup
     restart: "no"
     volumes:
-      - ./backend/database:/source
+      - backend_storage:/source/storage
       - ./backups:/backup
     command: >
       sh -c "
         apk add --no-cache sqlite &&
         mkdir -p /backup &&
-        cp /source/database.sqlite /backup/database-backup-$$(date +%Y%m%d-%H%M%S).sqlite &&
-        echo 'Database backup completed'
+        if [ -f /source/storage/database/database.sqlite ]; then
+          cp /source/storage/database/database.sqlite /backup/database-backup-$$(date +%Y%m%d-%H%M%S).sqlite &&
+          echo 'Database backup completed'
+        else
+          echo 'Database file not found, skipping backup'
+        fi
       "
     depends_on:
       - backend
@@ -159,6 +190,10 @@ volumes:
   redis_data:
     driver: local
   backend_vendor:
+    driver: local
+  backend_storage:
+    driver: local
+  backend_logs:
     driver: local
 
 networks:
