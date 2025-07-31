@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  RAILWAY_TOKEN: a8f51a95-d3bb-4287-935e-7ad45bc6038c
   RAILWAY_PRIVATE_DOMAIN: weeding-backend.railway.internal
   RAILWAY_PROJECT_NAME: weeding
   RAILWAY_ENVIRONMENT_NAME: production
