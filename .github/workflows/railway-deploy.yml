@@ -35,25 +35,18 @@ jobs:
           curl -fsSL https://railway.app/install.sh | sh
           echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
-      - name: Authenticate with GHCR
+      - name: Authenticate with GHCR (not needed for direct Railway deployment)
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "ℹ️ Direct Railway deployment - GHCR authentication not required"
 
-      - name: Deploy to Railway using GHCR image
+      - name: Deploy to Railway
         run: |
-          # Update Railway service to use the GHCR image
-          echo "Using container image: ${{ inputs.backend-image || 'ghcr.io/${{ github.repository }}/backend:latest' }}"
+          echo "🚂 Deploying to Railway using Dockerfile.railway..."
+          echo "Project: $RAILWAY_PROJECT_NAME"
+          echo "Service: $RAILWAY_SERVICE_NAME"
           
-          # Create a temporary Dockerfile that uses the GHCR image
-          cat > Dockerfile.railway << EOF
-          FROM ${{ inputs.backend-image || 'ghcr.io/${{ github.repository }}/backend:latest' }}
-          WORKDIR /var/www/html
-          EXPOSE \$PORT
-          CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=\$PORT"]
-          EOF
-          
-          # Deploy using the Railway CLI
-          railway up --detach --service $RAILWAY_SERVICE_ID --dockerfile Dockerfile.railway
+          # Deploy using the Railway CLI with the Railway-specific Dockerfile
+          railway up --detach --service $RAILWAY_SERVICE_ID
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -79,8 +72,8 @@ jobs:
 
       - name: Run database migrations
         run: |
-          # Run migrations on Railway
-          railway run --service $RAILWAY_SERVICE_ID -- php artisan migrate --force
+          echo "🔄 Database migrations are handled automatically in Dockerfile.railway startup command"
+          echo "Migrations run as part of the container startup process"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -123,7 +116,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Backend URL:** ${{ env.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "**API Endpoint:** ${{ env.DEPLOYMENT_URL }}/api" >> $GITHUB_STEP_SUMMARY
-          echo "**Container Image:** ${{ inputs.backend-image || 'ghcr.io/${{ github.repository }}/backend:latest' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Container Deployment:** Railway-optimized Dockerfile.railway" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Health Check:** ✅ Passed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -132,6 +125,6 @@ jobs:
           echo "- 🔄 Zero-downtime deployments" >> $GITHUB_STEP_SUMMARY
           echo "- 📊 Built-in metrics and monitoring" >> $GITHUB_STEP_SUMMARY
           echo "- 🔒 Automatic HTTPS" >> $GITHUB_STEP_SUMMARY
-          echo "- 📦 GHCR container deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 Railway-optimized container deployment" >> $GITHUB_STEP_SUMMARY
         env:
           DEPLOYMENT_URL: ${{ env.DEPLOYMENT_URL }}

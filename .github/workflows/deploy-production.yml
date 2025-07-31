@@ -23,27 +23,15 @@ jobs:
     name: "🧪 Run Tests & Quality Checks"
     uses: ./.github/workflows/ci-cd.yml
     
-  # Step 2: Build and push containers to GHCR
-  build-containers:
-    name: "📦 Build & Push to GHCR"
-    needs: run-tests
-    if: success() || github.event.inputs.force_deploy == 'true'
-    uses: ./.github/workflows/ghcr-build.yml
-    permissions:
-      contents: read
-      packages: write
-    
-  # Step 3: Deploy backend to Railway
+  # Step 2: Deploy backend to Railway (direct deployment)
   deploy-backend:
     name: "🚂 Deploy Backend (Railway)"
-    needs: build-containers
-    if: success()
+    needs: run-tests
+    if: success() || github.event.inputs.force_deploy == 'true'
     uses: ./.github/workflows/railway-deploy.yml
-    with:
-      backend-image: ${{ needs.build-containers.outputs.backend-image }}
     secrets: inherit
     
-  # Step 4: Deploy frontend to Vercel
+  # Step 3: Deploy frontend to Vercel
   deploy-frontend:
     name: "⚡ Deploy Frontend (Vercel)"
     needs: deploy-backend
@@ -54,7 +42,7 @@ jobs:
       environment: 'production'
     secrets: inherit
 
-  # Step 5: Post-deployment validation
+  # Step 4: Post-deployment validation
   validate-deployment:
     name: "✅ Validate Full Stack"
     needs: [deploy-backend, deploy-frontend]
@@ -119,7 +107,7 @@ jobs:
         echo "**🚂 Backend (Railway):** ${{ needs.deploy-backend.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
         echo "**⚡ Frontend (Vercel):** ${{ needs.deploy-frontend.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**📦 Container Registry:** GitHub Container Registry (GHCR)" >> $GITHUB_STEP_SUMMARY
+        echo "**📦 Container Deployment:** Railway-optimized direct deployment" >> $GITHUB_STEP_SUMMARY
         echo "**🔄 Deployment Status:** ✅ Successfully deployed and validated" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**🔗 Quick Links:**" >> $GITHUB_STEP_SUMMARY
@@ -129,15 +117,14 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**⏱️ Deployment Pipeline:**" >> $GITHUB_STEP_SUMMARY
         echo "1. ✅ Tests & Quality Checks" >> $GITHUB_STEP_SUMMARY
-        echo "2. ✅ Container Build & Push (GHCR)" >> $GITHUB_STEP_SUMMARY
-        echo "3. ✅ Backend Deployment (Railway)" >> $GITHUB_STEP_SUMMARY
-        echo "4. ✅ Frontend Deployment (Vercel)" >> $GITHUB_STEP_SUMMARY
-        echo "5. ✅ Full Stack Validation" >> $GITHUB_STEP_SUMMARY
+        echo "2. ✅ Backend Deployment (Railway)" >> $GITHUB_STEP_SUMMARY
+        echo "3. ✅ Frontend Deployment (Vercel)" >> $GITHUB_STEP_SUMMARY
+        echo "4. ✅ Full Stack Validation" >> $GITHUB_STEP_SUMMARY
 
   # Cleanup on failure
   cleanup-on-failure:
     name: "🧹 Cleanup on Failure"
-    needs: [run-tests, build-containers, deploy-backend, deploy-frontend, validate-deployment]
+    needs: [run-tests, deploy-backend, deploy-frontend, validate-deployment]
     runs-on: ubuntu-latest
     if: failure() && github.event.inputs.force_deploy != 'true'
     
@@ -152,7 +139,6 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Pipeline Stages:**" >> $GITHUB_STEP_SUMMARY
         echo "- Tests & Quality: ${{ needs.run-tests.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- Container Build: ${{ needs.build-containers.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Backend Deploy: ${{ needs.deploy-backend.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Frontend Deploy: ${{ needs.deploy-frontend.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Validation: ${{ needs.validate-deployment.result }}" >> $GITHUB_STEP_SUMMARY
