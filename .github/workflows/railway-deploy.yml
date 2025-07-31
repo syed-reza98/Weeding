@@ -12,7 +12,7 @@ env:
   RAILWAY_SERVICE_NAME: weeding-backend
   RAILWAY_PROJECT_ID: aa657bf5-3950-4119-b82e-d42bf3d5607b
   RAILWAY_ENVIRONMENT_ID: d6e59af0-9b1d-4210-a196-a031a32f9139
-  RAILWAY_SERVICE_ID: c1031165-c408-45e4-8f1f-c5ce86ad6639
+  RAILWAY_SERVICE_ID: c1031165-c408-45e4-8f1f-c5ce86ad6639  # Kept for reference, using SERVICE_NAME now
 
 jobs:
   deploy-backend-railway:
@@ -39,9 +39,20 @@ jobs:
           echo "🚂 Deploying to Railway using Dockerfile.railway..."
           echo "Project: $RAILWAY_PROJECT_NAME"
           echo "Service: $RAILWAY_SERVICE_NAME"
+          echo "Project ID: $RAILWAY_PROJECT_ID"
+          
+          # Link Railway CLI to the project first
+          echo "🔗 Linking to Railway project..."
+          railway link $RAILWAY_PROJECT_ID
+          
+          # List available services for debugging
+          echo "📋 Available services:"
+          railway status --json | jq -r '.services[] | "\(.name): \(.id)"' || echo "Could not list services"
           
           # Deploy using the Railway CLI with the Railway-specific Dockerfile
-          railway up --detach --service $RAILWAY_SERVICE_ID
+          # Use service name instead of potentially stale service ID
+          echo "🚀 Starting deployment..."
+          railway up --detach --service $RAILWAY_SERVICE_NAME
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -49,7 +60,7 @@ jobs:
         run: |
           # Poll for up to 3 minutes for deployment to be live
           for i in {1..36}; do
-            STATUS=$(railway status --json | jq -r '.deployments[] | select(.service.name=="weeding-backend") | .status' | head -n1)
+            STATUS=$(railway status --json | jq -r '.deployments[] | select(.service.name=="'$RAILWAY_SERVICE_NAME'") | .status' | head -n1)
             echo "Current status: $STATUS"
             if [ "$STATUS" = "SUCCESS" ] || [ "$STATUS" = "ACTIVE" ]; then
               echo "Deployment is live!"
@@ -57,7 +68,8 @@ jobs:
             fi
             if [ "$i" -eq 36 ]; then
               echo "Deployment did not become live in time."
-              railway logs --service $RAILWAY_SERVICE_ID
+              echo "🔍 Fetching deployment logs..."
+              railway logs --service $RAILWAY_SERVICE_NAME --tail 50 || echo "Could not fetch logs"
               exit 1
             fi
             sleep 5
@@ -75,7 +87,7 @@ jobs:
       - name: Get deployment URL
         id: railway-url
         run: |
-          DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[] | select(.service.name=="weeding-backend") | .url' | head -n1)
+          DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[] | select(.service.name=="'$RAILWAY_SERVICE_NAME'") | .url' | head -n1)
           if [ -z "$DEPLOYMENT_URL" ] || [ "$DEPLOYMENT_URL" = "null" ]; then
             DEPLOYMENT_URL="https://weeding-backend-production.up.railway.app"
           fi
@@ -99,7 +111,7 @@ jobs:
           done
           echo "❌ Backend health check failed - Response code: $response"
           echo "🔍 Checking Railway logs..."
-          railway logs --service $RAILWAY_SERVICE_ID --tail 50
+          railway logs --service $RAILWAY_SERVICE_NAME --tail 50 || echo "Could not fetch logs"
           exit 1
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
