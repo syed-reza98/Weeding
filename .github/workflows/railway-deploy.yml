@@ -2,11 +2,6 @@ name: Railway Deployment
 
 on:
   workflow_call:
-    inputs:
-      backend-image:
-        description: 'Backend container image to deploy'
-        required: true
-        type: string
   workflow_dispatch:
 
 env:
