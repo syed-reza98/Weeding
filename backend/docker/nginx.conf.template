@@ -45,7 +45,7 @@ http {
         image/svg+xml;
 
     server {
-        listen 8000;
+        listen $PORT;
         server_name _;
         root /var/www/html/public;
         index index.php;

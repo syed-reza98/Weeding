@@ -1,0 +1,150 @@
+# Railway-optimized Laravel Dockerfile
+FROM php:8.2-fpm-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    git \
+    curl \
+    libpng-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    sqlite-dev \
+    postgresql-dev \
+    nginx \
+    supervisor \
+    gettext
+
+# Install PHP extensions required for Laravel
+RUN docker-php-ext-install \
+    pdo \
+    pdo_sqlite \
+    pdo_pgsql \
+    gd \
+    xml \
+    bcmath \
+    opcache
+
+# Configure OPcache for production
+RUN { \
+    echo 'opcache.enable=1'; \
+    echo 'opcache.enable_cli=1'; \
+    echo 'opcache.memory_consumption=128'; \
+    echo 'opcache.interned_strings_buffer=8'; \
+    echo 'opcache.max_accelerated_files=4000'; \
+    echo 'opcache.revalidate_freq=2'; \
+    echo 'opcache.fast_shutdown=1'; \
+    } > /usr/local/etc/php/conf.d/opcache-recommended.ini
+
+# Install Composer
+COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
+
+# Create application user
+RUN addgroup -g 1000 -S www && \
+    adduser -u 1000 -S www -G www
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Copy composer files first for better caching
+COPY composer.json composer.lock ./
+
+# Install PHP dependencies
+RUN composer install \
+    --no-dev \
+    --optimize-autoloader \
+    --no-interaction \
+    --no-scripts \
+    --prefer-dist \
+    && composer clear-cache
+
+# Copy application code
+COPY . .
+
+# Set proper permissions
+RUN chown -R www:www /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
+
+# Create required directories and files
+RUN mkdir -p /var/log/supervisor /var/log/nginx \
+    && mkdir -p /var/www/html/database \
+    && touch /var/www/html/database/database.sqlite \
+    && chown -R www:www /var/www/html/database
+
+# Copy configuration files
+COPY docker/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Create startup script for Railway
+RUN echo '#!/bin/sh' > /usr/local/bin/railway-start.sh && \
+    echo 'set -e' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Set default PORT if not provided' >> /usr/local/bin/railway-start.sh && \
+    echo 'export PORT=${PORT:-8000}' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Generate nginx config with correct PORT' >> /usr/local/bin/railway-start.sh && \
+    echo 'envsubst "\$PORT" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Wait for database to be ready if using external DB' >> /usr/local/bin/railway-start.sh && \
+    echo 'echo "Setting up Laravel application on port $PORT..."' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Generate app key if not exists' >> /usr/local/bin/railway-start.sh && \
+    echo 'if [ ! -f .env ]; then' >> /usr/local/bin/railway-start.sh && \
+    echo '    cp .env.example .env' >> /usr/local/bin/railway-start.sh && \
+    echo '    # Configure for Railway environment' >> /usr/local/bin/railway-start.sh && \
+    echo '    if [ -n "$DATABASE_URL" ]; then' >> /usr/local/bin/railway-start.sh && \
+    echo '        # Use PostgreSQL from Railway' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "DATABASE_URL=$DATABASE_URL" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "DB_CONNECTION=pgsql" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '    else' >> /usr/local/bin/railway-start.sh && \
+    echo '        # Use SQLite for local/fallback' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "DB_CONNECTION=sqlite" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "DB_DATABASE=/var/www/html/database/database.sqlite" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '    fi' >> /usr/local/bin/railway-start.sh && \
+    echo '    # Configure for Railway caching (use file-based cache if Redis not available)' >> /usr/local/bin/railway-start.sh && \
+    echo '    if [ -n "$REDIS_URL" ]; then' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "REDIS_URL=$REDIS_URL" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "CACHE_STORE=redis" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '    else' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "CACHE_STORE=file" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '    fi' >> /usr/local/bin/railway-start.sh && \
+    echo '    # Configure session storage' >> /usr/local/bin/railway-start.sh && \
+    echo '    echo "SESSION_DRIVER=file" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo '    echo "QUEUE_CONNECTION=sync" >> .env' >> /usr/local/bin/railway-start.sh && \
+    echo 'fi' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo 'php artisan key:generate --force' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Wait for database to be ready' >> /usr/local/bin/railway-start.sh && \
+    echo 'echo "Waiting for database connection..."' >> /usr/local/bin/railway-start.sh && \
+    echo 'for i in {1..30}; do' >> /usr/local/bin/railway-start.sh && \
+    echo '    if php artisan migrate:status > /dev/null 2>&1; then' >> /usr/local/bin/railway-start.sh && \
+    echo '        echo "Database connection established!"' >> /usr/local/bin/railway-start.sh && \
+    echo '        break' >> /usr/local/bin/railway-start.sh && \
+    echo '    fi' >> /usr/local/bin/railway-start.sh && \
+    echo '    echo "Waiting for database... (attempt $i/30)"' >> /usr/local/bin/railway-start.sh && \
+    echo '    sleep 2' >> /usr/local/bin/railway-start.sh && \
+    echo 'done' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Cache configuration and routes' >> /usr/local/bin/railway-start.sh && \
+    echo 'php artisan config:cache' >> /usr/local/bin/railway-start.sh && \
+    echo 'php artisan route:cache' >> /usr/local/bin/railway-start.sh && \
+    echo 'php artisan view:cache' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Run database migrations' >> /usr/local/bin/railway-start.sh && \
+    echo 'php artisan migrate --force' >> /usr/local/bin/railway-start.sh && \
+    echo '' >> /usr/local/bin/railway-start.sh && \
+    echo '# Start supervisord' >> /usr/local/bin/railway-start.sh && \
+    echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/railway-start.sh && \
+    chmod +x /usr/local/bin/railway-start.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:$PORT/api/health || exit 1
+
+# Expose port (Railway will set PORT environment variable)
+EXPOSE $PORT
+
+# Start the application
+CMD ["/usr/local/bin/railway-start.sh"]
